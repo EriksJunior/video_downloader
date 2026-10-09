@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Baixe videos do YouTube e TikTok e escolha a qualidade do arquivo.">
+  <title>Framegrab - Video Downloader</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="noise"></div>
+  <main>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Framegrab inicio">
+        <span class="brand-mark"><i></i><i></i><i></i></span>
+        FRAMEGRAB
+      </a>
+      <span class="local-badge"><i></i> EXECUCAO LOCAL</span>
+    </header>
+
+    <section class="hero">
+      <p class="eyebrow">DOWNLOAD / CONVERTER / ARQUIVAR</p>
+      <h1>Seu video.<br><span>Sua qualidade.</span></h1>
+      <p class="intro">Cole o endereco de um video publico do YouTube ou TikTok, escolha a qualidade disponivel e deixe o resto por nossa conta.</p>
+
+      <form id="url-form" class="url-form">
+        <label for="video-url">ENDERECO DO VIDEO</label>
+        <div class="input-row">
+          <input id="video-url" name="url" type="url" placeholder="https://www.tiktok.com/@usuario/video/123..." required autocomplete="url">
+          <button id="analyze-button" type="submit">
+            <span>ANALISAR</span>
+            <b aria-hidden="true">&#8594;</b>
+          </button>
+        </div>
+      </form>
+
+      <div id="message" class="message" role="status" aria-live="polite"></div>
+
+      <section class="destination-panel" aria-labelledby="destination-heading">
+        <div class="destination-summary">
+          <div>
+            <p id="destination-heading">PASTA DE DESTINO</p>
+            <strong id="destination-path">Carregando...</strong>
+          </div>
+          <div class="destination-buttons">
+            <button id="manual-directory" type="button">DIGITAR CAMINHO</button>
+            <button id="change-directory" type="button">ESCOLHER PASTA</button>
+          </div>
+        </div>
+        <form id="directory-form" class="destination-form" hidden>
+          <label for="directory-input">CAMINHO COMPLETO</label>
+          <div class="directory-input-row">
+            <input id="directory-input" type="text" placeholder="C:\Users\seu-usuario\Videos" spellcheck="false" required>
+            <button type="submit">SALVAR</button>
+          </div>
+          <div class="directory-actions">
+            <button id="default-directory" type="button">REMOVER CONFIGURACAO</button>
+            <button id="cancel-directory" type="button">CANCELAR</button>
+          </div>
+        </form>
+      </section>
+
+      <section id="video-card" class="video-card" hidden>
+        <div class="thumbnail-wrap">
+          <img id="thumbnail" alt="Capa do video">
+          <span id="duration" class="duration"></span>
+        </div>
+        <div class="video-info">
+          <p class="card-label">VIDEO ENCONTRADO</p>
+          <h2 id="video-title"></h2>
+          <label for="quality">QUALIDADE DE SAIDA</label>
+          <select id="quality"></select>
+          <div class="cut-heading">
+            <span>RECORTAR VIDEO</span>
+            <small>OPCIONAL</small>
+          </div>
+          <div class="cut-fields">
+            <label>
+              INICIO
+              <input id="start-time" type="text" inputmode="numeric" maxlength="8" placeholder="00:00:00" aria-describedby="cut-help">
+            </label>
+            <span aria-hidden="true">&#8594;</span>
+            <label>
+              FIM
+              <input id="end-time" type="text" inputmode="numeric" maxlength="8" placeholder="00:01:30" aria-describedby="cut-help">
+            </label>
+          </div>
+          <p id="cut-help" class="cut-help">Use MM:SS ou HH:MM:SS. Deixe ambos vazios para baixar completo.</p>
+          <button id="download-button" class="download-button" type="button" disabled>
+            BAIXAR VIDEO <span>&#8595;</span>
+          </button>
+          <div id="progress-wrap" class="progress-wrap" hidden>
+            <div class="progress-meta"><span id="progress-status">PREPARANDO</span><strong id="progress-value">0%</strong></div>
+            <div class="progress-track"><i id="progress-bar"></i></div>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <footer>
+      <span>MP4 / VIDEO + AUDIO</span>
+      <span>DESTINO <b>ESCOLHIDO NA INTERFACE</b></span>
+      <span>USE APENAS CONTEUDO QUE VOCE PODE BAIXAR</span>
+    </footer>
+  </main>
+  <script src="/app.js" defer></script>
+</body>
+</html>
