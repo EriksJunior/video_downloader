@@ -36,7 +36,7 @@ main { min-height: 100vh; display: flex; flex-direction: column; padding: 28px 4
 .local-badge { font: 500 11px DM Mono, monospace; letter-spacing: .08em; }
 .local-badge i { display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: #5aa614; box-shadow: 0 0 0 4px rgba(90, 166, 20, .13); }
 
-.hero { width: min(1120px, 100%); margin: auto; padding: 70px 0 60px; }
+.hero { width: min(1120px, 100%); margin: auto; }
 .eyebrow, label, .card-label { font: 500 11px DM Mono, monospace; letter-spacing: .12em; }
 .eyebrow::before { content: ''; display: inline-block; width: 28px; height: 2px; margin: 0 10px 3px 0; background: var(--ink); }
 h1 { margin: 28px 0 20px; max-width: 850px; font-size: clamp(58px, 9vw, 126px); line-height: .82; letter-spacing: -.075em; font-weight: 800; }
