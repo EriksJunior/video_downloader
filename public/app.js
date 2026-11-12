@@ -298,7 +298,7 @@ downloadButton.addEventListener('click', async () => {
         progressStatus.textContent = {
           locating: 'LOCALIZANDO TRECHO',
           downloading: 'BAIXANDO',
-          processing: 'FINALIZANDO CORTE',
+          processing: 'FINALIZANDO VIDEO',
           completed: 'CONCLUIDO'
         }[job.phase] || 'PREPARANDO';
 

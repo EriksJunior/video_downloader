@@ -1,7 +1,7 @@
 const express = require('express');
 const path = require('path');
 const crypto = require('crypto');
-const { mkdir, readFile, writeFile, access } = require('fs/promises');
+const { mkdir, readFile, writeFile, access, rename, unlink, copyFile } = require('fs/promises');
 const { constants, existsSync } = require('fs');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
@@ -145,10 +145,65 @@ function isTikTokUrl(value) {
   return /(^|\.)tiktok\.com$/i.test(new URL(value).hostname);
 }
 
+function isYouTubeUrl(value) {
+  return /(^|\.)(youtube\.com|youtube-nocookie\.com|youtu\.be)$/i.test(new URL(value).hostname);
+}
+
+async function ensureYouTubeAudioCompatible(file, directory, job) {
+  const relative = file && path.relative(directory, file);
+  if (!file || !path.isAbsolute(file)
+    || relative === '..' || relative.startsWith(`..${path.sep}`)
+    || path.isAbsolute(relative)) {
+    throw new Error('Nao foi possivel localizar o arquivo baixado para verificar o audio.');
+  }
+
+  const { stdout } = await execFileAsync('ffprobe', [
+    '-v', 'error', '-select_streams', 'a', '-show_entries', 'stream=codec_name',
+    '-of', 'json', file
+  ]);
+  const streams = JSON.parse(stdout).streams || [];
+  if (!streams.some((stream) => stream.codec_name === 'opus')) return file;
+
+  job.phase = 'processing';
+  job.progress = Math.max(job.progress, 95);
+  const mp4File = path.extname(file).toLowerCase() === '.mp4'
+    ? file
+    : path.join(directory, `${path.parse(file).name} [AAC].mp4`);
+  const temporaryFile = path.join(directory, `.framegrab-${crypto.randomUUID()}.mp4`);
+
+  try {
+    await execFileAsync('ffmpeg', [
+      '-nostdin', '-loglevel', 'error', '-i', file,
+      '-map', '0:v?', '-map', '0:a?', '-c:v', 'copy', '-c:a', 'aac',
+      '-b:a', '192k', '-movflags', '+faststart', '-f', 'mp4', temporaryFile
+    ]);
+    if (mp4File === file) {
+      await rename(temporaryFile, file);
+      return file;
+    }
+
+    let destination = mp4File;
+    try {
+      await copyFile(temporaryFile, destination, constants.COPYFILE_EXCL);
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+      destination = path.join(directory, `${path.parse(file).name} [AAC ${crypto.randomUUID().slice(0, 8)}].mp4`);
+      await copyFile(temporaryFile, destination, constants.COPYFILE_EXCL);
+    }
+    await unlink(temporaryFile);
+    await unlink(file);
+    return destination;
+  } catch (error) {
+    await unlink(temporaryFile).catch(() => {});
+    throw error;
+  }
+}
+
 function errorMessage(error) {
   const output = `${error.stderr || ''}\n${error.message || ''}`;
 
   if (/URL valida|URL deve|endereco nao e permitido/i.test(error.message || '')) return error.message;
+  if (/^Nao foi possivel verificar ou converter o audio para AAC/.test(error.message || '')) return error.message;
   if (/unsupported url/i.test(output)) return 'Esse site ou endereco nao e suportado.';
   if (/private|sign in|login|cookies/i.test(output)) return 'O video exige acesso ou nao esta publico.';
   if (/not available|unavailable|removed/i.test(output)) return 'O video nao esta disponivel.';
@@ -307,6 +362,7 @@ app.post('/api/downloads', async (req, res) => {
     await validateDownloadDirectory(destinationDirectory);
     const suffix = clip ? ` [trecho ${clip.start}s-${clip.end}s]` : '';
     const regularFormat = `bestvideo[height<=${quality}]+bestaudio/best[height<=${quality}]`;
+    const youtubeFormat = `bestvideo[height<=${quality}]+bestaudio[ext=m4a]/${regularFormat}`;
     const directFormat = [
       `bestvideo[height<=${quality}][protocol=https][ext=mp4][vcodec^=avc1]+bestaudio[protocol=https][ext=m4a]`,
       `bestvideo[height<=${quality}][protocol=https][ext=mp4]+bestaudio[protocol=https][ext=m4a]`,
@@ -323,7 +379,7 @@ app.post('/api/downloads', async (req, res) => {
       noPlaylist: true,
       newline: true,
       progress: true,
-      format: tiktok ? tiktokFormat : (clip ? directFormat : regularFormat),
+      format: tiktok ? tiktokFormat : (clip ? directFormat : (isYouTubeUrl(url) ? youtubeFormat : regularFormat)),
       mergeOutputFormat: 'mp4',
       output: path.join(destinationDirectory, `%(title).160B [%(id)s]${suffix}.%(ext)s`),
       print: 'after_move:__FILE__:%(filepath)s'
@@ -339,6 +395,7 @@ app.post('/api/downloads', async (req, res) => {
 
     job.status = 'downloading';
     const clipDuration = clip ? clip.end - clip.start : null;
+    let downloadedFile = null;
     const processLine = (line) => {
       const percentage = line.match(/\[download\]\s+([\d.]+)%/);
       if (percentage) {
@@ -362,7 +419,10 @@ app.post('/api/downloads', async (req, res) => {
       }
 
       const fileMatch = line.match(/__FILE__:(.+)$/);
-      if (fileMatch) job.filename = path.basename(fileMatch[1].trim());
+      if (fileMatch) {
+        downloadedFile = fileMatch[1].trim();
+        job.filename = path.basename(downloadedFile);
+      }
     };
 
     const outputReader = () => {
@@ -378,6 +438,15 @@ app.post('/api/downloads', async (req, res) => {
     downloadProcess.stdout?.on('data', outputReader());
     downloadProcess.stderr?.on('data', outputReader());
     await downloadProcess;
+
+    if (isYouTubeUrl(url)) {
+      try {
+        const compatibleFile = await ensureYouTubeAudioCompatible(downloadedFile, destinationDirectory, job);
+        job.filename = path.basename(compatibleFile);
+      } catch (error) {
+        throw new Error(`Nao foi possivel verificar ou converter o audio para AAC. Confira se FFmpeg e FFprobe estao instalados. ${error.message}`);
+      }
+    }
 
     job.status = 'completed';
     job.phase = 'completed';

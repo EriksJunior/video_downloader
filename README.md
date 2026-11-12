@@ -10,7 +10,9 @@ O botao **Escolher pasta** abre o seletor nativo do Windows quando o servidor es
 
 ## Executar
 
-Requisitos: Node.js 18 ou superior, Python 3.10 ou superior e FFmpeg no `PATH`.
+Requisitos: Node.js 18 ou superior, Python 3.10 ou superior, FFmpeg e FFprobe no `PATH`.
+
+Nos downloads do YouTube, o aplicativo prefere audio AAC. Se o arquivo vier com audio Opus, ele converte somente o audio para AAC antes de concluir o download, mantendo o video sem recodificacao. Arquivos ja baixados nao sao alterados automaticamente.
 
 No Linux/WSL, prepare o ambiente Python do projeto para o yt-dlp conseguir acessar paginas de verificacao do TikTok (use Python 3.11 ou superior com `pip`):
 
