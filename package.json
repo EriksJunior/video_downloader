@@ -10,7 +10,7 @@
     "check": "node --check server.js && node --check public/app.js && node --check electron/main.js && node --check scripts/check-windows-assets.js",
     "test": "node --test server.test.js",
     "electron": "electron .",
-    "dist:win": "node scripts/check-windows-assets.js && electron-builder --win nsis --x64"
+    "dist:win": "node scripts/check-windows-assets.js && electron-builder --win nsis --x64 --publish never"
   },
   "engines": {
     "node": ">=18"
