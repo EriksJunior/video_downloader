@@ -34,6 +34,24 @@ Abra `http://127.0.0.1:3000` no navegador.
 
 Os arquivos ficam na pasta configurada na interface.
 
+## Instalador Windows 64 bits
+
+O aplicativo Electron inclui Node.js, yt-dlp, FFmpeg e FFprobe no instalador. Quem instala nao precisa configurar WSL, Python ou essas ferramentas. Para gerar o instalador, use **Windows x64 com Node.js 22 ou superior** (nao gere o pacote Windows a partir do WSL):
+
+```powershell
+$env:YOUTUBE_DL_SKIP_PYTHON_CHECK = '1'
+npm ci
+npm run check
+npm test
+npm run dist:win
+```
+
+O arquivo final fica em `dist/Framegrab-Setup-1.0.0-x64.exe`. Alternativamente, no GitHub, abra **Actions > Instalador Windows > Run workflow** e baixe o artefato `Framegrab-Windows-x64` da execucao concluida.
+
+O instalador cria atalhos e permite desinstalar em **Configuracoes > Aplicativos** do Windows. A desinstalacao nao apaga os videos salvos pelo usuario; as configuracoes ficam na pasta de dados do usuario (`%APPDATA%\Framegrab`) em vez da pasta de instalacao. Para abrir a versao Electron em desenvolvimento, use `npm run electron`.
+
+O instalador gerado sem certificado digital pode exibir um aviso do Windows SmartScreen. Para distribuicao ampla, assine o executavel com um certificado de assinatura de codigo. Os programas de terceiros incluidos no instalador possuem licencas proprias; confira-as antes de redistribuir.
+
 Para usar outra porta:
 
 ```bash

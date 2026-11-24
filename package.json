@@ -3,12 +3,14 @@
   "version": "1.0.0",
   "private": true,
   "description": "Aplicacao local para baixar videos escolhendo a qualidade.",
-  "main": "server.js",
+  "main": "electron/main.js",
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "check": "node --check server.js && node --check public/app.js",
-    "test": "node --test server.test.js"
+    "check": "node --check server.js && node --check public/app.js && node --check electron/main.js && node --check scripts/check-windows-assets.js",
+    "test": "node --test server.test.js",
+    "electron": "electron .",
+    "dist:win": "node scripts/check-windows-assets.js && electron-builder --win nsis --x64"
   },
   "engines": {
     "node": ">=18"
@@ -16,5 +18,58 @@
   "dependencies": {
     "express": "^5.1.0",
     "youtube-dl-exec": "^3.1.15"
+  },
+  "devDependencies": {
+    "electron": "^39.8.10",
+    "electron-builder": "^26.18.0"
+  },
+  "optionalDependencies": {
+    "@ffmpeg-installer/win32-x64": "^4.1.0",
+    "@ffprobe-installer/win32-x64": "^5.1.0"
+  },
+  "build": {
+    "appId": "com.framegrab.downloader",
+    "productName": "Framegrab",
+    "asar": true,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron/**/*",
+      "server.js",
+      "public/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "node_modules/youtube-dl-exec/bin/yt-dlp.exe",
+        "to": "bin/yt-dlp.exe"
+      },
+      {
+        "from": "node_modules/@ffmpeg-installer/win32-x64/ffmpeg.exe",
+        "to": "bin/ffmpeg.exe"
+      },
+      {
+        "from": "node_modules/@ffprobe-installer/win32-x64/ffprobe.exe",
+        "to": "bin/ffprobe.exe"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "artifactName": "Framegrab-Setup-${version}-x64.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "uninstallDisplayName": "Framegrab"
+    }
   }
 }

@@ -5,3 +5,4 @@ downloads/*
 .env
 .framegrab-settings.json
 npm-debug.log*
+dist/

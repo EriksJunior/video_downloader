@@ -5,18 +5,26 @@ const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
 
-async function createServer(info, audioCodec = 'aac', filename = 'video.mp4') {
+const testDirectory = path.join(__dirname, 'downloads');
+
+async function createServer(info, audioCodec = 'aac', filename = 'video.mp4', startOptions = {}) {
   const routes = new Map();
   const downloads = [];
   const commands = [];
   const fileOperations = [];
+  const settingsWrites = [];
+  let listenPort;
   const app = {
     use() {},
     post(route, handler) { routes.set(`POST ${route}`, handler); },
     get(route, handler) { routes.set(`GET ${route}`, handler); },
     put() {},
     delete() {},
-    listen() {}
+    listen(port, host, callback) {
+      listenPort = port;
+      process.nextTick(callback);
+      return { once() {} };
+    }
   };
   const express = () => app;
   express.json = () => () => {};
@@ -32,7 +40,7 @@ async function createServer(info, audioCodec = 'aac', filename = 'video.mp4') {
     downloads.push({ url, options, spawnOptions });
     const stdout = new EventEmitter();
     const result = new Promise((resolve) => process.nextTick(() => {
-      stdout.emit('data', `__FILE__:/tmp/opencode/${filename}\n`);
+      stdout.emit('data', `__FILE__:${path.join(testDirectory, filename)}\n`);
       resolve();
     }));
     result.stdout = stdout;
@@ -41,14 +49,15 @@ async function createServer(info, audioCodec = 'aac', filename = 'video.mp4') {
   };
 
   const source = readFileSync(path.join(__dirname, 'server.js'), 'utf8');
+  const serverModule = { exports: {} };
   vm.runInNewContext(source, {
     require(module) {
       if (module === 'express') return express;
       if (module === 'youtube-dl-exec') return youtubedl;
       if (module === 'fs') return { ...require('fs'), existsSync: () => true };
       if (module === 'fs/promises') return {
-        readFile: async () => JSON.stringify({ downloadDirectory: '/tmp/opencode', configured: true }),
-        writeFile: async () => {},
+        readFile: async () => JSON.stringify({ downloadDirectory: testDirectory, configured: true }),
+        writeFile: async (...args) => { settingsWrites.push(args); },
         mkdir: async () => {},
         access: async () => {},
         rename: async (...args) => { fileOperations.push(['rename', ...args]); },
@@ -73,25 +82,40 @@ async function createServer(info, audioCodec = 'aac', filename = 'video.mp4') {
       return require(module);
     },
     __dirname,
+    module: serverModule,
     URL,
     process,
     console,
     setTimeout
   }, { filename: 'server.js' });
-  await new Promise(setImmediate);
+  await serverModule.exports.startServer(startOptions);
 
   async function request(route, body) {
     let status = 200;
     let response;
-      await routes.get(route)({ body, params: { id: body?.id } }, {
+    await routes.get(route)({ body, params: { id: body?.id } }, {
       status(code) { status = code; return this; },
       json(data) { response = data; return this; }
     });
     return { status, response };
   }
 
-  return { request, analyses, downloads, commands, fileOperations };
+  return {
+    request, analyses, downloads, commands, fileOperations, settingsWrites,
+    get listenPort() { return listenPort; }
+  };
 }
+
+test('Electron usa porta dinamica, configuracoes do usuario e seletor nativo', async () => {
+  const settingsPath = path.join(testDirectory, 'user-settings.json');
+  const server = await createServer({}, 'aac', 'video.mp4', {
+    port: 0, settingsPath, selectDirectory: async () => testDirectory
+  });
+  assert.equal(server.listenPort, 0);
+  assert.equal(server.settingsWrites[0][0], settingsPath);
+  const selection = await server.request('POST /api/settings/select-download-directory', {});
+  assert.equal(selection.response.downloadDirectory, testDirectory);
+});
 
 test('TikTok oferece melhor qualidade quando nao informa resolucao', async () => {
   const server = await createServer({ title: 'Video TikTok', formats: [{ vcodec: 'h264', acodec: 'aac' }] });
@@ -99,7 +123,9 @@ test('TikTok oferece melhor qualidade quando nao informa resolucao', async () =>
   const info = await server.request('POST /api/info', { url });
   assert.equal(info.status, 200);
   assert.equal(info.response.qualities[0].value, 'best');
-  assert.match(server.analyses[0].spawnOptions.env.PATH, /^.*video-downloader\/\.venv\/bin:/);
+  assert.ok(server.analyses[0].spawnOptions.env.PATH.startsWith(
+    `${path.join(__dirname, '.venv', 'bin')}${path.delimiter}`
+  ));
 
   const download = await server.request('POST /api/downloads', { url, quality: 'best' });
   assert.equal(download.status, 202);
@@ -154,7 +180,7 @@ test('YouTube converte Opus para AAC sem recodificar o video', async () => {
   assert.deepEqual(Array.from(conversion.args.slice(conversion.args.indexOf('-c:v'), conversion.args.indexOf('-b:a'))),
     ['-c:v', 'copy', '-c:a', 'aac']);
   assert.equal(server.fileOperations[0][0], 'rename');
-  assert.equal(server.fileOperations[0][2], '/tmp/opencode/video.mp4');
+  assert.equal(server.fileOperations[0][2], path.join(testDirectory, 'video.mp4'));
   assert.equal((await server.request('GET /api/downloads/:id', { id: result.response.id })).response.status,
     'completed');
 });
@@ -165,7 +191,7 @@ test('YouTube converte arquivo WebM sem sobrescrever um MP4 existente', async ()
     url: 'https://www.youtube.com/watch?v=abc123', quality: '720'
   });
   assert.equal(server.fileOperations[0][0], 'copyFile');
-  assert.equal(server.fileOperations[0][2], '/tmp/opencode/video [AAC].mp4');
+  assert.equal(server.fileOperations[0][2], path.join(testDirectory, 'video [AAC].mp4'));
   assert.equal((await server.request('GET /api/downloads/:id', { id: result.response.id })).response.filename,
     'video [AAC].mp4');
 });

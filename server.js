@@ -5,7 +5,10 @@ const { mkdir, readFile, writeFile, access, rename, unlink, copyFile } = require
 const { constants, existsSync } = require('fs');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
-const youtubedl = require('youtube-dl-exec');
+const youtubeDlExec = require('youtube-dl-exec');
+const youtubedl = process.env.FRAMEGRAB_YT_DLP_PATH
+  ? youtubeDlExec.create(process.env.FRAMEGRAB_YT_DLP_PATH)
+  : youtubeDlExec;
 
 const execFileAsync = promisify(execFile);
 
@@ -13,7 +16,8 @@ const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '127.0.0.1';
 const LEGACY_DEFAULT_DOWNLOAD_DIR = path.join(__dirname, 'downloads');
-const SETTINGS_FILE = path.join(__dirname, '.framegrab-settings.json');
+let settingsFile = path.join(__dirname, '.framegrab-settings.json');
+let directorySelector = selectWindowsDirectory;
 const PYTHON_ENV_BIN = path.join(__dirname, '.venv', 'bin');
 const ytDlpEnv = existsSync(path.join(PYTHON_ENV_BIN, 'python3'))
   ? { ...process.env, PATH: `${PYTHON_ENV_BIN}${path.delimiter}${process.env.PATH || ''}` }
@@ -60,13 +64,13 @@ async function validateDownloadDirectory(directory) {
 async function saveDownloadDirectory(value) {
   const resolved = resolveDownloadDirectory(value);
   await validateDownloadDirectory(resolved);
-  await writeFile(SETTINGS_FILE, `${JSON.stringify({ downloadDirectory: value.trim(), configured: true }, null, 2)}\n`, 'utf8');
+  await writeFile(settingsFile, `${JSON.stringify({ downloadDirectory: value.trim(), configured: true }, null, 2)}\n`, 'utf8');
   downloadDirectory = resolved;
   downloadDirectoryLabel = toDisplayPath(resolved);
 }
 
 async function clearDownloadDirectory() {
-  await writeFile(SETTINGS_FILE, `${JSON.stringify({ downloadDirectory: null, configured: false }, null, 2)}\n`, 'utf8');
+  await writeFile(settingsFile, `${JSON.stringify({ downloadDirectory: null, configured: false }, null, 2)}\n`, 'utf8');
   downloadDirectory = null;
   downloadDirectoryLabel = null;
 }
@@ -101,7 +105,7 @@ async function selectWindowsDirectory() {
 
 async function loadSettings() {
   try {
-    const settings = JSON.parse(await readFile(SETTINGS_FILE, 'utf8'));
+    const settings = JSON.parse(await readFile(settingsFile, 'utf8'));
     if (!settings.downloadDirectory) return clearDownloadDirectory();
 
     const resolved = resolveDownloadDirectory(settings.downloadDirectory);
@@ -293,7 +297,7 @@ app.post('/api/settings/select-download-directory', async (req, res) => {
 
   directoryDialogOpen = true;
   try {
-    const selectedDirectory = await selectWindowsDirectory();
+    const selectedDirectory = await directorySelector();
     if (!selectedDirectory) return res.json({ cancelled: true });
 
     await saveDownloadDirectory(selectedDirectory);
@@ -467,14 +471,27 @@ app.get('/api/downloads/:id', (req, res) => {
 
 app.use((req, res) => res.status(404).json({ error: 'Rota nao encontrada.' }));
 
-loadSettings().then(() => {
-  app.listen(PORT, HOST, () => {
-    console.log(`Video Downloader disponivel em http://${HOST}:${PORT}`);
+async function startServer({ port = PORT, settingsPath = settingsFile, selectDirectory = selectWindowsDirectory } = {}) {
+  settingsFile = settingsPath;
+  directorySelector = selectDirectory;
+  await mkdir(path.dirname(settingsFile), { recursive: true });
+  await loadSettings();
+  return new Promise((resolve, reject) => {
+    const server = app.listen(port, HOST, () => resolve(server));
+    server.once('error', reject);
+  });
+}
+
+module.exports = { startServer };
+
+if (require.main === module) {
+  startServer().then((server) => {
+    console.log(`Video Downloader disponivel em http://${HOST}:${server.address().port}`);
     console.log(downloadDirectoryLabel
       ? `Os arquivos serao salvos em ${downloadDirectoryLabel}`
       : 'Escolha a pasta de destino na interface antes do primeiro download.');
+  }).catch((error) => {
+    console.error(`Nao foi possivel iniciar: ${error.message}`);
+    process.exitCode = 1;
   });
-}).catch((error) => {
-  console.error(`Nao foi possivel iniciar: ${error.message}`);
-  process.exitCode = 1;
-});
+}
